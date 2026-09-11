@@ -1,0 +1,7 @@
+import { CheckCircle2, Clock3, KeyRound } from 'lucide-react';
+import type { CookProfile, Order } from '@/types';
+import { Button, Panel } from '@maas/ui';
+
+export function OrderTracking({ order, cook, onBack }: { order: Order; cook: CookProfile | null; onBack: () => void }) {
+    return <main className="mx-auto max-w-2xl px-4 py-8 sm:px-6 animate-fade-in"><Panel className="text-center" padded><div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-leaf-50 text-leaf"><CheckCircle2 size={30} /></div><p className="text-sm font-medium text-leaf-dark">Tiffin booked</p><h1 className="mt-1 font-display text-3xl font-semibold text-ink">Your meal is on its way</h1><p className="mt-2 text-sm text-ink-muted">{cook?.name || 'Your cook'} · {order.mealSlot}</p><div className="mt-7 rounded-lg border border-marigold/20 bg-marigold-50 p-5"><div className="flex items-center justify-center gap-2 text-sm text-marigold-dark"><KeyRound size={16} /> Show this handover code</div><p className="mt-3 font-display text-5xl font-semibold tracking-[0.25em] text-ink">{order.handoverCode || '----'}</p><p className="mt-3 text-xs text-marigold-dark/80">The cook enters this code after handing over your meal.</p></div><div className="mt-5 flex items-center justify-center gap-2 text-sm text-ink-muted"><Clock3 size={16} /> Pending handover confirmation</div><Button className="mt-6" variant="outline" onClick={onBack}>Back to cooks</Button></Panel></main>;
+}

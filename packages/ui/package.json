@@ -1,0 +1,13 @@
+{
+    "name": "@maas/ui",
+    "private": true,
+    "version": "0.1.0",
+    "type": "module",
+    "main": "./src/index.ts",
+    "types": "./src/index.ts",
+    "dependencies": {
+        "@maas/core": "*",
+        "lucide-react": "^0.446.0",
+        "react": "^18.3.1"
+    }
+}
