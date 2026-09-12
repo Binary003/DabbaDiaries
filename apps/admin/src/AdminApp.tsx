@@ -17,7 +17,7 @@ export default function AdminApp() {
             const [{ data: cookRows }, { data: zoneRows }, { data: orderRows }] = await Promise.all([
                 supabase.from('cook_profiles').select('*'),
                 supabase.from('delivery_zones').select('*'),
-                supabase.from('orders').select('*').order('delivery_date', { ascending: false }),
+                supabase.from('orders').select('*, customer:profiles!orders_customer_id_fkey(full_name, name, phone, pincode, locality)').order('delivery_date', { ascending: false }),
             ]);
             if (cookRows) setCooks(cookRows.map((row) => mapCook(row as Record<string, unknown>)));
             if (zoneRows) setZones(zoneRows.map((row) => mapZone(row as Record<string, unknown>)));

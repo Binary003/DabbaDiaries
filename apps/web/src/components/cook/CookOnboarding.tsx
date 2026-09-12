@@ -15,7 +15,7 @@ import { DAYS, CAPACITY_CAP, PLATFORM_FEE_PER_MEAL } from '@/data';
 import { formatINR } from '@/utils';
 
 interface CookOnboardingProps {
-  onComplete: (profile: Partial<CookProfile>) => void;
+  onComplete: (profile: Partial<CookProfile> & { payout?: { upiId?: string; accountNumber?: string; ifsc?: string } }) => void;
   existingProfile?: CookProfile;
 }
 
@@ -60,6 +60,9 @@ export function CookOnboarding({ onComplete, existingProfile }: CookOnboardingPr
   const [selfDeliveryFee, setSelfDeliveryFee] = useState(
     existingProfile?.selfDeliveryFee || 0,
   );
+  const [upiId, setUpiId] = useState('');
+  const [accountNumber, setAccountNumber] = useState('');
+  const [ifsc, setIfsc] = useState('');
 
   const handleCapacityChange = (val: number) => {
     if (val > CAPACITY_CAP) {
@@ -167,6 +170,15 @@ export function CookOnboarding({ onComplete, existingProfile }: CookOnboardingPr
                 onChange={(e) => setPincodes(e.target.value)}
                 hint="Customers in these pincodes will see your kitchen."
               />
+            </div>
+          </Panel>
+
+          <Panel>
+            <h2 className="mb-2 font-display text-lg font-semibold text-ink">Cook payout account</h2>
+            <p className="mb-4 text-sm text-ink-muted">Mock setup for held cook transfers. You can use UPI or bank details.</p>
+            <div className="space-y-3">
+              <Input label="UPI ID (optional)" name="upiId" placeholder="name@upi" value={upiId} onChange={(e) => setUpiId(e.target.value)} />
+              <div className="grid gap-3 sm:grid-cols-2"><Input label="Bank account (optional)" name="accountNumber" value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} /><Input label="IFSC" name="ifsc" value={ifsc} onChange={(e) => setIfsc(e.target.value)} /></div>
             </div>
           </Panel>
 
@@ -455,6 +467,7 @@ export function CookOnboarding({ onComplete, existingProfile }: CookOnboardingPr
                   capacityCap: CAPACITY_CAP,
                   selfDelivery,
                   selfDeliveryFee,
+                  payout: { upiId: upiId || undefined, accountNumber: accountNumber || undefined, ifsc: ifsc || undefined },
                 })
               }
               disabled={!canProceedStep3}

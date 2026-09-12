@@ -389,6 +389,11 @@ export function AdminDashboard({
                                 <p className="text-xs text-ink-muted">
                                   {order.address} · {order.mealSlot}
                                 </p>
+                                {order.deliveryMode === 'platform-delivery' && (
+                                  <p className="mt-1 text-xs text-spice">
+                                    {order.customerPhone || 'Phone not provided'} · {order.customerLocality || order.address || 'Locality not provided'}
+                                  </p>
+                                )}
                               </div>
                               <Badge
                                 tone={

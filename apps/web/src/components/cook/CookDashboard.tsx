@@ -204,6 +204,12 @@ export function CookDashboard({
                           <Clock size={10} /> Pending
                         </Badge>
                       </div>
+                      {order.deliveryMode === 'cook-delivery' && (
+                        <div className="mb-3 rounded-md border border-marigold/20 bg-marigold-50/60 px-3 py-2 text-xs text-ink">
+                          <p className="font-medium text-ink">Delivery details</p>
+                          <p className="mt-1">{order.customerPhone || 'Phone not provided'} · {order.customerLocality || order.address || 'Locality not provided'}</p>
+                        </div>
+                      )}
                       <div className="flex gap-2">
                         <input
                           type="text"
@@ -272,6 +278,7 @@ export function CookDashboard({
                         <p className="text-sm font-medium text-ink">
                           {order.customerName}
                         </p>
+                        {order.deliveryMode === 'cook-delivery' && <p className="mt-0.5 text-xs text-ink-muted">{order.customerPhone || 'Phone not provided'} · {order.customerLocality || order.address || 'Locality not provided'}</p>}
                         <div className="mt-0.5 flex items-center gap-2 text-xs text-ink-muted">
                           <Icon size={12} />
                           <span className="capitalize">

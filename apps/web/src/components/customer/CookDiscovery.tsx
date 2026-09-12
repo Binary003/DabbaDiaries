@@ -17,6 +17,7 @@ interface CookDiscoveryProps {
   onBack: () => void;
   onSelectCook: (cook: CookProfile) => void;
   userLocation?: ResolvedLocation | null;
+  activeSubscriptionCookId?: string;
 }
 
 type VegFilter = 'all' | 'veg' | 'mixed';
@@ -29,6 +30,7 @@ export function CookDiscovery({
   onBack,
   onSelectCook,
   userLocation = null,
+  activeSubscriptionCookId,
 }: CookDiscoveryProps) {
   const [vegFilter, setVegFilter] = useState<VegFilter>('all');
   const [sort, setSort] = useState<SortFilter>('rating');
@@ -183,6 +185,7 @@ export function CookDiscovery({
                       <Drumstick size={10} /> Mixed
                     </Badge>
                   )}
+                  {cook.id === activeSubscriptionCookId && <Badge tone="leaf">Active subscription</Badge>}
                 </div>
                 <p className="mt-0.5 truncate text-sm text-ink-muted">
                   {cook.tagline}

@@ -27,7 +27,6 @@ export function AuthScreen({ onAuthenticated }: AuthScreenProps) {
     if (!supabase) return setMessage('Supabase is not configured. Check apps/web/.env.local.');
     setBusy(true);
     setMessage('');
-    if (mode === 'signup') localStorage.setItem('dabbadiaries-pending-first-topup', 'true');
     const result = mode === 'signin'
       ? await supabase.auth.signInWithPassword({ email, password })
       : await supabase.auth.signUp({
@@ -35,7 +34,7 @@ export function AuthScreen({ onAuthenticated }: AuthScreenProps) {
         password,
         options: {
           emailRedirectTo: `${window.location.origin}/`,
-          data: { name, phone, pincode, locality, role },
+          data: { name, full_name: name, phone, pincode, locality, role },
         },
       });
     setBusy(false);

@@ -25,7 +25,7 @@ export interface Subscription {
 export interface Order {
   id: string; subscriptionId?: string; orderType?: 'subscription' | 'single'; customerId: string; cookId: string; date: string; deliveryDate?: string; mealSlot: MealSlot;
   status: OrderStatus; handoverCode?: string; handoverConfirmedAt?: string; deliveryMode: DeliveryMode; zoneId?: string;
-  customerName: string; cookName: string; pincode: string; address?: string;
+  customerName: string; customerPhone?: string; customerLocality?: string; cookName: string; pincode: string; address?: string;
 }
 export interface DeliveryZone { id: string; name: string; locality?: string; pincode: string; hasPlatformDelivery: boolean; assignedPartnerId?: string; deliveryPartner?: string; deliveryFee: number; deliveryWindow: string; activeOrders: number; }
 export interface Payment { id: string; subscriptionId: string; customerId: string; cookId: string; amount: number; platformFee: number; deliveryFee: number; cookEarning: number; cookPayout?: number; deliveryMode: DeliveryMode; date: string; status: 'pending' | 'released' | 'failed'; }
@@ -34,3 +34,7 @@ export interface FeeSplit { mealTotal: number; platformFee: number; deliveryFee:
 export type WalletTransactionType = 'topup' | 'subscription_debit' | 'single_order_debit' | 'meal_release';
 export interface Wallet { id: string; userId: string; balance: number; }
 export interface WalletTransaction { id: string; type: WalletTransactionType; amount: number; relatedSubscriptionId?: string; relatedOrderId?: string; description: string; createdAt: string; }
+export interface PaymentRecord { id: string; customerId: string; amount: number; description: string; status: 'created' | 'refunded'; createdAt: string; }
+export interface TransferRecord { id: string; paymentId: string; cookId: string; orderId?: string; amount: number; status: 'on_hold' | 'released'; holdUntil?: string; releasedAt?: string; createdAt: string; }
+export interface RefundRecord { id: string; paymentId: string; amount: number; reason: string; createdAt: string; }
+export interface CookPayoutAccount { id: string; cookId: string; accountType: 'upi' | 'bank'; upiId?: string; accountNumber?: string; ifsc?: string; providerAccountId?: string; }

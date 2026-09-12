@@ -44,7 +44,7 @@ begin
   if topup_amount < 1 or topup_amount > 100000 then raise exception 'Top-up must be between 1 and 100000'; end if;
   insert into public.wallets (user_id) values (customer) on conflict (user_id) do nothing;
   select * into wallet_row from public.wallets where user_id = customer for update;
-  -- TODO(Razorpay): verify the gateway payment before crediting this balance.
+  -- REAL PAYMENT INTEGRATION: verify the Razorpay webhook before crediting this balance.
   update public.wallets set balance = balance + topup_amount, updated_at = now() where id = wallet_row.id returning * into result;
   insert into public.wallet_transactions (wallet_id, type, amount, description) values (wallet_row.id, 'topup', topup_amount, 'Prototype wallet top-up');
   return result;
@@ -56,6 +56,7 @@ returns public.subscriptions language plpgsql security definer set search_path =
 declare cook_row public.cook_profiles; wallet_row public.wallets; result public.subscriptions; active_count integer; plan_days integer; meal_price integer; plan_amount numeric; debit_amount numeric;
 begin
   if customer <> auth.uid() then raise exception 'Customer identity mismatch'; end if;
+  -- REAL PAYMENT INTEGRATION: require verified Razorpay payment confirmation before the debit.
   select * into cook_row from public.cook_profiles where id = (payload->>'cook_id')::uuid for update;
   if cook_row.id is null or cook_row.status <> 'active' then raise exception 'Cook is unavailable'; end if;
   plan_days := case when payload->>'plan_type' = 'weekly' then 7 when payload->>'plan_type' = 'monthly' then 30 else 0 end;
@@ -82,6 +83,7 @@ returns public.orders language plpgsql security definer set search_path = public
 declare cook_row public.cook_profiles; wallet_row public.wallets; result public.orders; current_count integer; meal_price numeric; order_date date;
 begin
   if customer <> auth.uid() then raise exception 'Customer identity mismatch'; end if;
+  -- REAL PAYMENT INTEGRATION: require verified Razorpay payment confirmation before the debit.
   select * into cook_row from public.cook_profiles where id = (payload->>'cook_id')::uuid for update;
   if cook_row.id is null or cook_row.status <> 'active' then raise exception 'Cook is unavailable'; end if;
   order_date := greatest(current_date, coalesce((payload->>'delivery_date')::date, current_date));

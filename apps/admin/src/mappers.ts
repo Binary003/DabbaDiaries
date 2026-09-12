@@ -13,5 +13,7 @@ export function mapZone(row: Record<string, unknown>): DeliveryZone {
 }
 
 export function mapOrder(row: Record<string, unknown>): Order {
-  return { id: String(row.id), subscriptionId: String(row.subscription_id), customerId: String(row.customer_id), cookId: String(row.cook_id), date: String(row.delivery_date), deliveryDate: String(row.delivery_date), mealSlot: row.meal_type as Order['mealSlot'], status: row.status as Order['status'], handoverCode: undefined, deliveryMode: 'self-pickup', zoneId: row.delivery_zone_id ? String(row.delivery_zone_id) : undefined, customerName: '', cookName: '', pincode: '', address: '' };
+  const customer = (row.customer as Record<string, unknown> | null) ?? {};
+  const locality = String(customer.locality ?? '');
+  return { id: String(row.id), subscriptionId: row.subscription_id ? String(row.subscription_id) : undefined, customerId: String(row.customer_id), cookId: String(row.cook_id), date: String(row.delivery_date), deliveryDate: String(row.delivery_date), mealSlot: row.meal_type as Order['mealSlot'], status: row.status as Order['status'], handoverCode: undefined, deliveryMode: row.delivery_mode as Order['deliveryMode'], zoneId: row.delivery_zone_id ? String(row.delivery_zone_id) : undefined, customerName: String(customer.full_name ?? customer.name ?? ''), customerPhone: customer.phone ? String(customer.phone) : undefined, customerLocality: locality || undefined, cookName: '', pincode: customer.pincode ? String(customer.pincode) : '', address: locality || undefined };
 }

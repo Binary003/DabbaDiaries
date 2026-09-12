@@ -5,6 +5,7 @@ import {
     DAILY_CAPACITY_LIMIT,
     generateHandoverCode,
     getDistanceKm,
+    parsePaymentBreakdown,
     validateCapacity,
     validateHandoverCode,
 } from '../src';
@@ -50,5 +51,44 @@ describe('distance calculation', () => {
 
     it('returns zero for identical coordinates', () => {
         expect(getDistanceKm(12.9716, 77.5946, 12.9716, 77.5946)).toBe(0);
+    });
+});
+
+describe('payment breakdown parsing', () => {
+    it('formats single-order JSON into a clean fee list', () => {
+        const breakdown = parsePaymentBreakdown(JSON.stringify({
+            kind: 'single_order',
+            mealPrice: 85,
+            platformFee: 15,
+            total: 100,
+        }));
+
+        expect(breakdown.total).toBe(100);
+        expect(breakdown.kind).toBe('single_order');
+        expect(breakdown.items).toEqual([
+            { label: 'Meal price', amount: 85 },
+            { label: 'Platform fee', amount: 15 },
+        ]);
+    });
+
+    it('formats a subscription JSON payload with a clean fee breakdown', () => {
+        const breakdown = parsePaymentBreakdown(JSON.stringify({
+            kind: 'subscription',
+            cookName: 'Radha Kitchen',
+            planDays: 7,
+            mealPrice: 80,
+            platformFee: 105,
+            deliveryFee: 0,
+            total: 665,
+        }));
+
+        expect(breakdown.kind).toBe('subscription');
+        expect(breakdown.cookName).toBe('Radha Kitchen');
+        expect(breakdown.planDays).toBe(7);
+        expect(breakdown.total).toBe(665);
+        expect(breakdown.items).toEqual([
+            { label: 'Meal price', amount: 80 },
+            { label: 'Platform fee', amount: 105 },
+        ]);
     });
 });

@@ -231,7 +231,7 @@ export function CookProfileCheckout({
               key={type}
               onClick={() => setPlanType(type)}
               className={[
-                'relative rounded-lg border-2 p-4 text-left transition-all',
+                'relative min-h-11 rounded-lg border-2 p-4 text-left transition-all',
                 planType === type
                   ? 'border-marigold bg-marigold-50/50'
                   : 'border-steel/15 bg-paper-50 hover:border-steel/30',
@@ -267,7 +267,7 @@ export function CookProfileCheckout({
               key={slot}
               onClick={() => setMealSlot(slot)}
               className={[
-                'rounded-md border px-4 py-2.5 text-sm font-medium capitalize transition-colors',
+                'min-h-11 rounded-md border px-4 py-2.5 text-sm font-medium capitalize transition-colors',
                 mealSlot === slot
                   ? 'border-spice bg-spice-50 text-spice-dark'
                   : 'border-steel/15 bg-paper-50 text-ink-muted hover:border-steel/30',
