@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AdminDashboard } from './AdminDashboard';
+import { AdminDashboard, type AdminOperationsSummary } from './AdminDashboard';
 import { mockCooks, mockZones, mockOrders } from './data';
 import type { CookProfile, DeliveryZone } from '@maas/core';
 import { AuthGate } from './AuthGate';
@@ -10,25 +10,55 @@ export default function AdminApp() {
     const [cooks, setCooks] = useState<typeof mockCooks>([]);
     const [zones, setZones] = useState<typeof mockZones>([]);
     const [orders, setOrders] = useState<typeof mockOrders>([]);
+    const [operationsSummary, setOperationsSummary] = useState<AdminOperationsSummary>({ summary: { total_orders: 0, pending_orders: 0, confirmed_orders: 0, delivered_orders: 0, cancelled_orders: 0, platform_revenue: 0, cook_payouts: 0 }, cooks: [] });
 
     useEffect(() => {
+        let channel: ReturnType<NonNullable<typeof supabase>['channel']> | null = null;
+        let cancelled = false;
+
         const load = async () => {
             if (!supabase) return;
-            const [{ data: cookRows }, { data: zoneRows }, { data: orderRows }] = await Promise.all([
+            const [{ data: cookRows }, { data: zoneRows }, { data: orderRows }, { data: summaryRow }] = await Promise.all([
                 supabase.from('cook_profiles').select('*'),
                 supabase.from('delivery_zones').select('*'),
-                supabase.from('orders').select('*, customer:profiles!orders_customer_id_fkey(full_name, name, phone, pincode, locality)').order('delivery_date', { ascending: false }),
+                supabase.from('orders').select('*, customer:profiles!orders_customer_id_fkey(full_name, name, phone, pincode, locality)').order('delivery_date', { ascending: false }).range(0, 24),
+                supabase.rpc('get_admin_operations_summary', { page_number: 1, page_size: 25 }),
             ]);
             if (cookRows) setCooks(cookRows.map((row) => mapCook(row as Record<string, unknown>)));
             if (zoneRows) setZones(zoneRows.map((row) => mapZone(row as Record<string, unknown>)));
             if (orderRows) setOrders(orderRows.map((row) => mapOrder(row as Record<string, unknown>)));
+            if (summaryRow) setOperationsSummary(summaryRow as AdminOperationsSummary);
         };
-        void load();
-        const channel = supabase?.channel('admin-live-data')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => void load())
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'cook_profiles' }, () => void load())
-            .subscribe();
-        return () => { if (channel) void supabase?.removeChannel(channel); };
+
+        const connect = async () => {
+            if (!supabase || cancelled) return;
+            const { data } = await supabase.auth.getSession();
+            if (!data.session || cancelled) return;
+            await load();
+            if (cancelled) return;
+            channel = supabase.channel('admin-live-data')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => void load())
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'cook_profiles' }, () => void load())
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'payments' }, () => void load())
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'transfers' }, () => void load())
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'refunds' }, () => void load())
+                .subscribe();
+        };
+
+        void connect();
+        const { data: authListener } = supabase?.auth.onAuthStateChange((event) => {
+            if (event === 'SIGNED_IN') void connect();
+            if (event === 'SIGNED_OUT' && channel) {
+                void supabase?.removeChannel(channel);
+                channel = null;
+            }
+        }) ?? { data: { subscription: null } };
+
+        return () => {
+            cancelled = true;
+            if (authListener?.subscription) authListener.subscription.unsubscribe();
+            if (channel) void supabase?.removeChannel(channel);
+        };
     }, []);
 
     const updateCook = (cookId: string, updates: Partial<CookProfile>) => {
@@ -40,5 +70,5 @@ export default function AdminApp() {
         void supabase?.from('delivery_zones').update({ has_platform_delivery: updates.hasPlatformDelivery, delivery_fee: updates.deliveryFee, assigned_partner_id: updates.assignedPartnerId }).eq('id', zoneId);
     };
 
-    return <AuthGate><AdminDashboard cooks={cooks} zones={zones} orders={orders} onUpdateCook={updateCook} onUpdateZone={updateZone} /></AuthGate>;
+    return <AuthGate><AdminDashboard cooks={cooks} zones={zones} orders={orders} operationsSummary={operationsSummary} onUpdateCook={updateCook} onUpdateZone={updateZone} /></AuthGate>;
 }

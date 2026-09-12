@@ -20,12 +20,31 @@ import { validateCapacity } from '@maas/core';
 import { Button, Badge, Panel, SectionHeader, EmptyState, Modal, Input } from '@maas/ui';
 import { formatINR, getFullDayName } from './utils';
 
+export interface AdminOperationsSummary {
+  summary: {
+    total_orders: number;
+    pending_orders: number;
+    confirmed_orders: number;
+    delivered_orders: number;
+    cancelled_orders: number;
+    platform_revenue: number;
+    cook_payouts: number;
+  };
+  cooks: Array<{ cook_id: string; cook_name: string; order_count: number; delivered_count: number; open_count: number; meal_value: number }>;
+}
+
+const emptySummary: AdminOperationsSummary = {
+  summary: { total_orders: 0, pending_orders: 0, confirmed_orders: 0, delivered_orders: 0, cancelled_orders: 0, platform_revenue: 0, cook_payouts: 0 },
+  cooks: [],
+};
+
 interface AdminDashboardProps {
   cooks: CookProfile[];
   zones: DeliveryZone[];
   orders: Order[];
   onUpdateCook: (cookId: string, updates: Partial<CookProfile>) => void;
   onUpdateZone: (zoneId: string, updates: Partial<DeliveryZone>) => void;
+  operationsSummary?: AdminOperationsSummary;
 }
 
 type Tab = 'verification' | 'zones' | 'orders' | 'payouts';
@@ -36,6 +55,7 @@ export function AdminDashboard({
   orders,
   onUpdateCook,
   onUpdateZone,
+  operationsSummary = emptySummary,
 }: AdminDashboardProps) {
   const [tab, setTab] = useState<Tab>('verification');
   const [rejectCook, setRejectCook] = useState<CookProfile | null>(null);
@@ -47,6 +67,7 @@ export function AdminDashboard({
 
   const pendingCooks = cooks.filter((c) => c.verificationStatus === 'pending');
   const approvedCooks = cooks.filter((c) => c.verificationStatus === 'approved');
+  const metrics = operationsSummary.summary;
 
   const tabs: { id: Tab; label: string; count?: number }[] = [
     { id: 'verification', label: 'Verification', count: pendingCooks.length },
@@ -101,6 +122,35 @@ export function AdminDashboard({
           Admin dashboard
         </h1>
       </div>
+
+      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-5">
+        {[
+          ['Orders', metrics.total_orders],
+          ['Open orders', metrics.pending_orders + metrics.confirmed_orders],
+          ['Delivered', metrics.delivered_orders],
+          ['Platform revenue', formatINR(metrics.platform_revenue)],
+          ['Cook payouts', formatINR(metrics.cook_payouts)],
+        ].map(([label, value]) => (
+          <Panel key={String(label)} padded className="p-4">
+            <p className="text-xs text-ink-muted">{label}</p>
+            <p className="mt-1 font-display text-2xl font-semibold text-ink">{value}</p>
+          </Panel>
+        ))}
+      </div>
+
+      {operationsSummary.cooks.length > 0 && (
+        <Panel className="mb-6" padded>
+          <SectionHeader title="Orders by cook" subtitle="Counts stay compact; the order sheet shows recent details." />
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {operationsSummary.cooks.map((cook) => (
+              <div key={cook.cook_id} className="rounded-md border border-steel/10 bg-paper-50 px-3 py-2.5">
+                <p className="text-sm font-medium text-ink">{cook.cook_name}</p>
+                <p className="mt-1 text-xs text-ink-muted">{cook.order_count} orders · {cook.open_count} open · {cook.delivered_count} delivered</p>
+              </div>
+            ))}
+          </div>
+        </Panel>
+      )}
 
       {/* Tab bar */}
       <div className="mb-6 overflow-x-auto scrollbar-thin">
@@ -339,8 +389,8 @@ export function AdminDashboard({
       {tab === 'orders' && (
         <div className="animate-fade-in">
           <SectionHeader
-            title="Daily order sheet"
-            subtitle="Grouped by zone for delivery routing"
+            title="Recent order sheet"
+            subtitle="Showing the latest 25 orders, grouped by zone"
           />
           {(() => {
             const zonesWithOrders = zones.filter((z) =>
