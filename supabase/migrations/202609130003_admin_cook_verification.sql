@@ -29,3 +29,11 @@ create policy "admins read transfers" on public.transfers
 drop policy if exists "admins read refunds" on public.refunds;
 create policy "admins read refunds" on public.refunds
   for select using (public.is_admin());
+
+drop policy if exists "cooks read customer profiles for orders" on public.profiles;
+create policy "cooks read customer profiles for orders" on public.profiles
+  for select using (exists (
+    select 1 from public.orders
+    where orders.customer_id = profiles.id
+      and orders.cook_id in (select id from public.cook_profiles where user_id = auth.uid())
+  ));

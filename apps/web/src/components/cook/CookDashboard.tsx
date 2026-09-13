@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { validateCapacity, validateHandoverCode } from '@maas/core';
+import { validateCapacity } from '@maas/core';
 import {
   CheckCircle2,
   AlertCircle,
@@ -19,7 +19,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Panel } from '@/components/ui/Panel';
 import { SectionHeader } from '@/components/ui/SectionHeader';
 import { Input } from '@/components/ui/Input';
-import { formatINR, getFullDayName } from '@/utils';
+import { formatINR, getFullDayName, getTodayString } from '@/utils';
 import { CAPACITY_CAP, PLATFORM_FEE_PER_MEAL } from '@/data';
 
 interface CookDashboardProps {
@@ -27,7 +27,7 @@ interface CookDashboardProps {
   orders: Order[];
   payments: Payment[];
   onUpdateCook: (updates: Partial<CookProfile>) => void;
-  onUpdateOrder: (orderId: string, updates: Partial<Order>, submittedCode?: string) => void;
+  onUpdateOrder: (orderId: string, updates: Partial<Order>, submittedCode?: string) => Promise<void>;
   onEditProfile: () => void;
 }
 
@@ -48,7 +48,7 @@ export function CookDashboard({
   const [menuDraft, setMenuDraft] = useState(cook.weeklyMenu);
 
   const todayOrders = useMemo(
-    () => orders.filter((o) => o.cookId === cook.id),
+    () => orders.filter((o) => o.cookId === cook.id && (o.deliveryDate || o.date) === getTodayString()),
     [orders, cook.id],
   );
 
@@ -56,7 +56,7 @@ export function CookDashboard({
     (o) => o.status === 'pending',
   );
   const confirmedOrders = todayOrders.filter(
-    (o) => o.status === 'confirmed',
+    (o) => o.status === 'confirmed' || o.status === 'delivered',
   );
 
   const weekEarnings = useMemo(() => {
@@ -73,18 +73,14 @@ export function CookDashboard({
     return { selfPickup, selfDelivery, platformDelivery, total };
   }, [payments, cook.id]);
 
-  const handleVerifyCode = (orderId: string, expectedCode: string) => {
+  const handleVerifyCode = async (orderId: string) => {
     const input = codeInputs[orderId] || '';
-    if (validateHandoverCode(expectedCode, input)) {
-      setCodeErrors((prev) => ({ ...prev, [orderId]: '' }));
+    setCodeErrors((prev) => ({ ...prev, [orderId]: '' }));
+    try {
+      await onUpdateOrder(orderId, { status: 'delivered' }, input);
       setCodeInputs((prev) => ({ ...prev, [orderId]: '' }));
-      onUpdateOrder(orderId, { status: 'confirmed' }, input);
-    } else {
-      setCodeErrors((prev) => ({
-        ...prev,
-        [orderId]: 'Wrong code. Ask the customer for the correct 4-digit code.',
-      }));
-      setCodeInputs((prev) => ({ ...prev, [orderId]: '' }));
+    } catch (error) {
+      setCodeErrors((prev) => ({ ...prev, [orderId]: error instanceof Error ? error.message : 'Handover confirmation failed.' }));
     }
   };
 
@@ -228,7 +224,7 @@ export function CookDashboard({
                           onKeyDown={(e) =>
                             e.key === 'Enter' &&
                             (codeInputs[order.id] || '').length === 4 &&
-                            handleVerifyCode(order.id, order.handoverCode || '')
+                            void handleVerifyCode(order.id)
                           }
                           className={[
                             'w-32 rounded-md border bg-white/60 px-3 py-2 text-center font-display text-lg tracking-[0.15em] text-ink placeholder:text-ink-faint',
@@ -241,7 +237,7 @@ export function CookDashboard({
                         <Button
                           size="sm"
                           onClick={() =>
-                            handleVerifyCode(order.id, order.handoverCode || '')
+                            void handleVerifyCode(order.id)
                           }
                           disabled={(codeInputs[order.id] || '').length !== 4}
                         >

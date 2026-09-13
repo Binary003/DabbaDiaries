@@ -46,6 +46,7 @@ const SUPABASE_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][
 
 function mapOrderRow(row: Record<string, unknown>): Order {
   const customer = (row.customer as Record<string, unknown> | null) ?? {};
+  const subscription = (row.subscription as Record<string, unknown> | null) ?? {};
   const fullName = String(customer.full_name ?? customer.name ?? '');
   const locality = String(customer.locality ?? '');
   return {
@@ -55,6 +56,7 @@ function mapOrderRow(row: Record<string, unknown>): Order {
     status: row.status as Order['status'], handoverCode: row.handover_code ? String(row.handover_code) : undefined,
     handoverConfirmedAt: row.handover_confirmed_at ? String(row.handover_confirmed_at) : undefined,
     deliveryMode: row.delivery_mode as DeliveryMode, zoneId: row.delivery_zone_id ? String(row.delivery_zone_id) : undefined,
+    subscriptionPlanType: subscription.plan_type as Order['subscriptionPlanType'], subscriptionTotalDays: subscription.total_days ? Number(subscription.total_days) : undefined, subscriptionStartDate: subscription.start_date ? String(subscription.start_date) : undefined,
     customerName: fullName, customerPhone: customer.phone ? String(customer.phone) : undefined,
     customerLocality: locality || undefined, cookName: '',
     pincode: customer.pincode ? String(customer.pincode) : '', address: locality || undefined,
@@ -259,7 +261,7 @@ export default function App() {
       const matchedCook = cooks.find((cook) => cook.id === cookRow.id);
       if (matchedCook) setCookProfile(matchedCook);
       const { data: orderRows, error: orderError } = await supabase.from('orders')
-        .select('*, customer:profiles!orders_customer_id_fkey(full_name, name, phone, pincode, locality)')
+        .select('*, customer:profiles!orders_customer_id_fkey(full_name, name, phone, pincode, locality), subscription:subscriptions(plan_type, total_days, start_date)')
         .eq('cook_id', cookRow.id)
         .order('delivery_date', { ascending: false });
       if (orderError) {
@@ -584,14 +586,15 @@ export default function App() {
     );
   };
 
-  const handleUpdateOrder = (orderId: string, updates: Partial<Order>, submittedCode?: string) => {
+  const handleUpdateOrder = async (orderId: string, updates: Partial<Order>, submittedCode?: string): Promise<void> => {
     setOrders((prev) =>
       prev.map((o) => (o.id === orderId ? { ...o, ...updates } : o)),
     );
-    if (updates.status === 'confirmed' && supabase) {
-      void supabase.rpc('confirm_handover', { order_id: orderId, submitted_code: submittedCode ?? orders.find((order) => order.id === orderId)?.handoverCode ?? '' }).then(({ error }) => {
-        if (!error) void loadPayments();
-      });
+    if (updates.status === 'delivered' && supabase) {
+      const { error } = await supabase.rpc('confirm_handover', { order_id: orderId, submitted_code: submittedCode ?? '' });
+      if (error) throw new Error(error.message);
+      setOrders((current) => current.map((order) => order.id === orderId ? { ...order, status: 'delivered', handoverConfirmedAt: new Date().toISOString() } : order));
+      await loadPayments();
     }
   };
 

@@ -25,6 +25,7 @@ export interface Subscription {
 export interface Order {
   id: string; subscriptionId?: string; orderType?: 'subscription' | 'single'; customerId: string; cookId: string; date: string; deliveryDate?: string; mealSlot: MealSlot;
   status: OrderStatus; handoverCode?: string; handoverConfirmedAt?: string; deliveryMode: DeliveryMode; zoneId?: string;
+  subscriptionPlanType?: 'weekly' | 'monthly'; subscriptionTotalDays?: number; subscriptionStartDate?: string;
   customerName: string; customerPhone?: string; customerLocality?: string; cookName: string; pincode: string; address?: string;
 }
 export interface DeliveryZone { id: string; name: string; locality?: string; pincode: string; hasPlatformDelivery: boolean; assignedPartnerId?: string; deliveryPartner?: string; deliveryFee: number; deliveryWindow: string; activeOrders: number; }
