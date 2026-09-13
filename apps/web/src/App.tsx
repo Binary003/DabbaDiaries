@@ -11,7 +11,7 @@ import {
   CURRENT_COOK_ID,
   PLATFORM_FEE_PER_MEAL,
 } from '@/data';
-import { formatINR, generateHandoverCode } from '@/utils';
+import { formatINR, generateHandoverCode, normalizePincode } from '@/utils';
 import { TopNav } from '@/components/ui/TopNav';
 import { PincodeEntry } from '@/components/customer/PincodeEntry';
 import { CookDiscovery } from '@/components/customer/CookDiscovery';
@@ -244,21 +244,45 @@ export default function App() {
   );
 
   useEffect(() => {
+    let cancelled = false;
+    let channel: ReturnType<NonNullable<typeof supabase>['channel']> | null = null;
+
     const loadCookOrders = async () => {
       if (!supabase || !sessionReady || !authenticated || role !== 'cook') return;
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) return;
       const { data: cookRow, error: cookError } = await supabase.from('cook_profiles').select('id').eq('user_id', userData.user.id).maybeSingle();
-      if (cookError || !cookRow) return;
+      if (cookError || !cookRow || cancelled) {
+        if (cookError) console.warn('Cook profile lookup failed', cookError);
+        return;
+      }
       const matchedCook = cooks.find((cook) => cook.id === cookRow.id);
       if (matchedCook) setCookProfile(matchedCook);
-      const { data: orderRows } = await supabase.from('orders')
+      const { data: orderRows, error: orderError } = await supabase.from('orders')
         .select('*, customer:profiles!orders_customer_id_fkey(full_name, name, phone, pincode, locality)')
         .eq('cook_id', cookRow.id)
         .order('delivery_date', { ascending: false });
-      if (orderRows) setOrders(orderRows.map((row) => mapOrderRow(row as Record<string, unknown>)));
+      if (orderError) {
+        console.warn('Cook orders lookup failed', orderError);
+        return;
+      }
+      if (!cancelled && orderRows) setOrders(orderRows.map((row) => mapOrderRow(row as Record<string, unknown>)));
+
+      if (!channel) {
+        channel = supabase.channel(`cook-orders-${cookRow.id}`)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `cook_id=eq.${cookRow.id}` }, () => void loadCookOrders())
+          .subscribe((status, subscriptionError) => {
+            if (subscriptionError || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+              console.warn('Cook order realtime subscription failed', subscriptionError || status);
+            }
+          });
+      }
     };
     void loadCookOrders();
+    return () => {
+      cancelled = true;
+      if (channel) void supabase?.removeChannel(channel);
+    };
   }, [sessionReady, authenticated, role, cooks]);
 
   useEffect(() => {
@@ -271,10 +295,19 @@ export default function App() {
         setDemoCatalog(true);
         return;
       }
-      const [{ data: cookRows }, { data: zoneRows }] = await Promise.all([
+      const [cookResult, zoneResult] = await Promise.all([
         supabase.from('cook_profiles').select('*'),
         supabase.from('delivery_zones').select('*'),
       ]);
+      if (cookResult.error || zoneResult.error) {
+        setCustomerRecordsError(cookResult.error?.message || zoneResult.error?.message || 'Cook catalog could not be loaded.');
+        setCooks([]);
+        setZones([]);
+        setDemoCatalog(false);
+        return;
+      }
+      const cookRows = cookResult.data;
+      const zoneRows = zoneResult.data;
       if (!cookRows?.length) {
         setCooks(mockCooks);
         setZones(mockZones);
@@ -282,12 +315,12 @@ export default function App() {
         return;
       }
       const nextCooks = (cookRows ?? []).map((row) => mapCook(row as Record<string, unknown>));
-      const demoCook = mockCooks.find((cook) => cook.pincodes.includes('201310'));
+      const demoCook = mockCooks.find((cook) => cook.pincodes.some((cookPincode) => normalizePincode(cookPincode) === '201310'));
       const cooksWithDemoFallback = demoCook && !nextCooks.some((cook) => cook.pincodes.includes('201310'))
         ? [...nextCooks, demoCook]
         : nextCooks;
       const nextZones = (zoneRows ?? []).map((row) => mapZone(row as Record<string, unknown>));
-      const demoZone = mockZones.find((zone) => zone.pincode === '201310');
+      const demoZone = mockZones.find((zone) => normalizePincode(zone.pincode) === '201310');
       setCooks(cooksWithDemoFallback);
       setZones(demoZone && !nextZones.some((zone) => zone.pincode === '201310') ? [...nextZones, demoZone] : nextZones);
       setDemoCatalog(false);

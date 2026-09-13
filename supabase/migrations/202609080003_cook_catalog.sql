@@ -13,12 +13,16 @@ alter table public.cook_profiles
   add column if not exists active_subscribers integer not null default 0 check (active_subscribers >= 0);
 alter table public.cook_profiles add column if not exists zone_id uuid references public.delivery_zones(id);
 
+drop policy if exists "cooks create own profile" on public.cook_profiles;
 create policy "cooks create own profile" on public.cook_profiles for insert
   with check (user_id = auth.uid());
+drop policy if exists "cooks update own profile" on public.cook_profiles;
 create policy "cooks update own profile" on public.cook_profiles for update
   using (user_id = auth.uid()) with check (user_id = auth.uid());
 
+drop policy if exists "customers create subscriptions" on public.subscriptions;
 create policy "customers create subscriptions" on public.subscriptions for insert
   with check (customer_id = auth.uid());
+drop policy if exists "customers update own subscriptions" on public.subscriptions;
 create policy "customers update own subscriptions" on public.subscriptions for update
   using (customer_id = auth.uid()) with check (customer_id = auth.uid());

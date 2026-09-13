@@ -11,7 +11,7 @@ export function mapCook(row: Record<string, unknown>): CookProfile {
     capacity: Number(row.daily_capacity ?? 1), capacityCap: 20, dailyCapacity: Number(row.daily_capacity ?? 1),
     selfDelivery: Boolean(row.self_delivery_enabled), selfDeliveryFee: Number(row.self_delivery_fee ?? 0),
     fssaiTier: 'basic-registration', fssaiNumber: String(row.fssai_number ?? ''),
-    verificationStatus: row.status === 'active' ? 'approved' : 'pending', status: row.status as CookProfile['status'],
+    verificationStatus: row.status === 'active' ? 'approved' : row.status === 'rejected' ? 'rejected' : 'pending', status: row.status as CookProfile['status'], rejectionReason: row.rejection_reason ? String(row.rejection_reason) : undefined,
     zoneId: row.zone_id ? String(row.zone_id) : undefined, latitude: row.latitude == null ? undefined : Number(row.latitude), longitude: row.longitude == null ? undefined : Number(row.longitude), mealsPerDay: 1, activeSubscribers: Number(row.active_subscribers ?? 0),
   };
 }

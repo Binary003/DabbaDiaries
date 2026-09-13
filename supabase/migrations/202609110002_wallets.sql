@@ -1,6 +1,6 @@
-create type public.wallet_transaction_type as enum ('topup', 'subscription_debit', 'single_order_debit', 'meal_release');
+do $$ begin create type public.wallet_transaction_type as enum ('topup', 'subscription_debit', 'single_order_debit', 'meal_release'); exception when duplicate_object then null; end $$;
 
-create table public.wallets (
+create table if not exists public.wallets (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null unique references public.profiles(id) on delete cascade,
   balance numeric(12,2) not null default 0 check (balance >= 0),
@@ -8,7 +8,7 @@ create table public.wallets (
   updated_at timestamptz not null default now()
 );
 
-create table public.wallet_transactions (
+create table if not exists public.wallet_transactions (
   id uuid primary key default gen_random_uuid(),
   wallet_id uuid not null references public.wallets(id) on delete cascade,
   type public.wallet_transaction_type not null,
@@ -19,10 +19,12 @@ create table public.wallet_transactions (
   created_at timestamptz not null default now()
 );
 
-create index wallet_transactions_recent_idx on public.wallet_transactions (wallet_id, created_at desc);
+create index if not exists wallet_transactions_recent_idx on public.wallet_transactions (wallet_id, created_at desc);
 alter table public.wallets enable row level security;
 alter table public.wallet_transactions enable row level security;
+drop policy if exists "users read own wallet" on public.wallets;
 create policy "users read own wallet" on public.wallets for select using (user_id = auth.uid());
+drop policy if exists "users read own wallet transactions" on public.wallet_transactions;
 create policy "users read own wallet transactions" on public.wallet_transactions for select using (wallet_id in (select id from public.wallets where user_id = auth.uid()));
 
 create or replace function public.ensure_wallet(customer uuid)

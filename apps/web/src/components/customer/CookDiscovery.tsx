@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/Badge';
 import { StarRating } from '@/components/ui/StarRating';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { CookListSkeleton } from '@/components/ui/Skeleton';
-import { formatINR } from '@/utils';
+import { formatINR, normalizePincode } from '@/utils';
 
 interface CookDiscoveryProps {
   pincode: string;
@@ -38,7 +38,8 @@ export function CookDiscovery({
   const [distanceFilter, setDistanceFilter] = useState<'1' | '2' | '3' | null>(null);
 
   const filtered = useMemo(() => {
-    let result = cooks.filter((c) => c.pincodes.includes(pincode));
+    const normalizedPincode = normalizePincode(pincode);
+    let result = cooks.filter((c) => c.pincodes.some((cookPincode) => normalizePincode(cookPincode) === normalizedPincode));
     if (vegFilter === 'veg') result = result.filter((c) => c.vegType === 'veg');
     if (vegFilter === 'mixed')
       result = result.filter((c) => c.vegType === 'mixed');

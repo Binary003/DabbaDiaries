@@ -1,12 +1,12 @@
 create extension if not exists "pgcrypto";
 
-create type public.user_role as enum ('customer', 'cook', 'admin');
-create type public.cook_status as enum ('pending', 'active', 'paused');
-create type public.order_status as enum ('pending', 'confirmed', 'skipped', 'delivered', 'cancelled');
-create type public.delivery_mode as enum ('self-pickup', 'cook-delivery', 'platform-delivery');
-create type public.subscription_status as enum ('active', 'ended', 'cancelled');
+do $$ begin create type public.user_role as enum ('customer', 'cook', 'admin'); exception when duplicate_object then null; end $$;
+do $$ begin create type public.cook_status as enum ('pending', 'active', 'paused'); exception when duplicate_object then null; end $$;
+do $$ begin create type public.order_status as enum ('pending', 'confirmed', 'skipped', 'delivered', 'cancelled'); exception when duplicate_object then null; end $$;
+do $$ begin create type public.delivery_mode as enum ('self-pickup', 'cook-delivery', 'platform-delivery'); exception when duplicate_object then null; end $$;
+do $$ begin create type public.subscription_status as enum ('active', 'ended', 'cancelled'); exception when duplicate_object then null; end $$;
 
-create table public.profiles (
+create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   name text not null,
   phone text not null,
@@ -16,7 +16,7 @@ create table public.profiles (
   created_at timestamptz not null default now()
 );
 
-create table public.cook_profiles (
+create table if not exists public.cook_profiles (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null unique references public.profiles(id) on delete cascade,
   kitchen_photo_url text,
@@ -30,7 +30,7 @@ create table public.cook_profiles (
   created_at timestamptz not null default now()
 );
 
-create table public.delivery_zones (
+create table if not exists public.delivery_zones (
   id uuid primary key default gen_random_uuid(),
   locality text not null,
   pincode text not null,
@@ -39,7 +39,7 @@ create table public.delivery_zones (
   delivery_fee integer not null default 0 check (delivery_fee >= 0)
 );
 
-create table public.subscriptions (
+create table if not exists public.subscriptions (
   id uuid primary key default gen_random_uuid(),
   customer_id uuid not null references public.profiles(id),
   cook_id uuid not null references public.cook_profiles(id),
@@ -53,7 +53,7 @@ create table public.subscriptions (
   created_at timestamptz not null default now()
 );
 
-create table public.orders (
+create table if not exists public.orders (
   id uuid primary key default gen_random_uuid(),
   subscription_id uuid not null references public.subscriptions(id) on delete cascade,
   cook_id uuid not null references public.cook_profiles(id),
@@ -67,7 +67,7 @@ create table public.orders (
   unique (subscription_id, delivery_date, meal_type)
 );
 
-create table public.payments (
+create table if not exists public.payments (
   id uuid primary key default gen_random_uuid(),
   subscription_id uuid not null references public.subscriptions(id),
   amount integer not null check (amount >= 0),
@@ -77,7 +77,7 @@ create table public.payments (
   status text not null default 'pending' check (status in ('pending', 'released', 'failed'))
 );
 
-create table public.ratings (
+create table if not exists public.ratings (
   id uuid primary key default gen_random_uuid(),
   order_id uuid not null unique references public.orders(id),
   customer_id uuid not null references public.profiles(id),
@@ -87,10 +87,36 @@ create table public.ratings (
   created_at timestamptz not null default now()
 );
 
-create index orders_cook_date_idx on public.orders (cook_id, delivery_date, status);
-create index orders_customer_date_idx on public.orders (customer_id, delivery_date);
-create index subscriptions_cook_status_idx on public.subscriptions (cook_id, status);
-create index delivery_zones_pincode_idx on public.delivery_zones (pincode);
+create index if not exists orders_cook_date_idx on public.orders (cook_id, delivery_date, status);
+create index if not exists orders_customer_date_idx on public.orders (customer_id, delivery_date);
+create index if not exists subscriptions_cook_status_idx on public.subscriptions (cook_id, status);
+create index if not exists delivery_zones_pincode_idx on public.delivery_zones (pincode);
+
+do $$
+declare
+  role_type text;
+begin
+  select format_type(a.atttypid, a.atttypmod)
+    into role_type
+  from pg_attribute a
+  join pg_class c on c.oid = a.attrelid
+  join pg_namespace n on n.oid = c.relnamespace
+  where n.nspname = 'public' and c.relname = 'profiles'
+    and a.attname = 'role' and not a.attisdropped;
+
+  if role_type = 'public.cook_status' then
+    alter table public.profiles alter column role drop default;
+    alter table public.profiles alter column role type public.user_role
+      using case role::text
+        when 'active' then 'cook'::public.user_role
+        when 'pending' then 'customer'::public.user_role
+        when 'paused' then 'customer'::public.user_role
+        else role::text::public.user_role
+      end;
+  end if;
+
+  alter table public.profiles alter column role set default 'customer'::public.user_role;
+end $$;
 
 alter table public.profiles enable row level security;
 alter table public.cook_profiles enable row level security;
@@ -100,15 +126,25 @@ alter table public.orders enable row level security;
 alter table public.payments enable row level security;
 alter table public.ratings enable row level security;
 
+drop policy if exists "users read own profile" on public.profiles;
 create policy "users read own profile" on public.profiles for select using (id = auth.uid());
+drop policy if exists "customers read active cooks" on public.cook_profiles;
 create policy "customers read active cooks" on public.cook_profiles for select using (status = 'active' or user_id = auth.uid());
+drop policy if exists "users read zones" on public.delivery_zones;
 create policy "users read zones" on public.delivery_zones for select using (true);
+drop policy if exists "customers read own subscriptions" on public.subscriptions;
 create policy "customers read own subscriptions" on public.subscriptions for select using (customer_id = auth.uid());
+drop policy if exists "cooks read their subscriptions" on public.subscriptions;
 create policy "cooks read their subscriptions" on public.subscriptions for select using (cook_id in (select id from public.cook_profiles where user_id = auth.uid()));
+drop policy if exists "customers read own orders" on public.orders;
 create policy "customers read own orders" on public.orders for select using (customer_id = auth.uid());
+drop policy if exists "cooks read their orders" on public.orders;
 create policy "cooks read their orders" on public.orders for select using (cook_id in (select id from public.cook_profiles where user_id = auth.uid()));
+drop policy if exists "customers read own payments" on public.payments;
 create policy "customers read own payments" on public.payments for select using (subscription_id in (select id from public.subscriptions where customer_id = auth.uid()));
+drop policy if exists "cooks read own payouts" on public.payments;
 create policy "cooks read own payouts" on public.payments for select using (subscription_id in (select id from public.subscriptions where cook_id in (select id from public.cook_profiles where user_id = auth.uid())));
+drop policy if exists "customers create ratings for own orders" on public.ratings;
 create policy "customers create ratings for own orders" on public.ratings for insert with check (customer_id = auth.uid() and order_id in (select id from public.orders where customer_id = auth.uid() and status = 'delivered'));
 
 create or replace function public.is_admin()
@@ -119,12 +155,19 @@ security definer
 set search_path = public
 as $$ select exists (select 1 from public.profiles where id = auth.uid() and role = 'admin') $$;
 
+drop policy if exists "admins manage profiles" on public.profiles;
 create policy "admins manage profiles" on public.profiles for all using (public.is_admin()) with check (public.is_admin());
+drop policy if exists "admins manage cooks" on public.cook_profiles;
 create policy "admins manage cooks" on public.cook_profiles for all using (public.is_admin()) with check (public.is_admin());
+drop policy if exists "admins manage zones" on public.delivery_zones;
 create policy "admins manage zones" on public.delivery_zones for all using (public.is_admin()) with check (public.is_admin());
+drop policy if exists "admins manage subscriptions" on public.subscriptions;
 create policy "admins manage subscriptions" on public.subscriptions for all using (public.is_admin()) with check (public.is_admin());
+drop policy if exists "admins manage orders" on public.orders;
 create policy "admins manage orders" on public.orders for all using (public.is_admin()) with check (public.is_admin());
+drop policy if exists "admins manage payments" on public.payments;
 create policy "admins manage payments" on public.payments for all using (public.is_admin()) with check (public.is_admin());
+drop policy if exists "admins manage ratings" on public.ratings;
 create policy "admins manage ratings" on public.ratings for all using (public.is_admin()) with check (public.is_admin());
 
 create or replace function public.create_subscription_with_capacity(customer uuid, payload jsonb)

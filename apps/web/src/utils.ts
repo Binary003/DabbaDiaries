@@ -34,3 +34,7 @@ export function getFullDayName(date: Date = new Date()): string {
   ];
   return days[date.getDay()];
 }
+
+export function normalizePincode(value: string): string {
+  return value.replace(/\s+/g, '').trim();
+}

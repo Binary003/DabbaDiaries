@@ -42,9 +42,10 @@ interface AdminDashboardProps {
   cooks: CookProfile[];
   zones: DeliveryZone[];
   orders: Order[];
-  onUpdateCook: (cookId: string, updates: Partial<CookProfile>) => void;
-  onUpdateZone: (zoneId: string, updates: Partial<DeliveryZone>) => void;
+  onUpdateCook: (cookId: string, updates: Partial<CookProfile>) => Promise<void>;
+  onUpdateZone: (zoneId: string, updates: Partial<DeliveryZone>) => Promise<void>;
   operationsSummary?: AdminOperationsSummary;
+  errorMessage?: string;
 }
 
 type Tab = 'verification' | 'zones' | 'orders' | 'payouts';
@@ -56,6 +57,7 @@ export function AdminDashboard({
   onUpdateCook,
   onUpdateZone,
   operationsSummary = emptySummary,
+  errorMessage = '',
 }: AdminDashboardProps) {
   const [tab, setTab] = useState<Tab>('verification');
   const [rejectCook, setRejectCook] = useState<CookProfile | null>(null);
@@ -64,6 +66,7 @@ export function AdminDashboard({
   const [partnerName, setPartnerName] = useState('');
   const [partnerFee, setPartnerFee] = useState(30);
   const [payoutTriggered, setPayoutTriggered] = useState(false);
+  const [actionError, setActionError] = useState('');
 
   const pendingCooks = cooks.filter((c) => c.verificationStatus === 'pending');
   const approvedCooks = cooks.filter((c) => c.verificationStatus === 'approved');
@@ -76,20 +79,27 @@ export function AdminDashboard({
     { id: 'payouts', label: 'Payouts' },
   ];
 
-  const handleApprove = (cookId: string) => {
+  const handleApprove = async (cookId: string) => {
     const cook = cooks.find((item) => item.id === cookId);
     if (!cook || !validateCapacity(cook.capacity).valid) return;
-    onUpdateCook(cookId, { verificationStatus: 'approved', rejectionReason: undefined });
+    setActionError('');
+    try {
+      await onUpdateCook(cookId, { verificationStatus: 'approved', rejectionReason: undefined });
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Cook approval failed.');
+    }
   };
 
-  const handleReject = () => {
+  const handleReject = async () => {
     if (rejectCook && rejectReason.trim()) {
-      onUpdateCook(rejectCook.id, {
-        verificationStatus: 'rejected',
-        rejectionReason: rejectReason,
-      });
-      setRejectCook(null);
-      setRejectReason('');
+      setActionError('');
+      try {
+        await onUpdateCook(rejectCook.id, { verificationStatus: 'rejected', rejectionReason: rejectReason });
+        setRejectCook(null);
+        setRejectReason('');
+      } catch (error) {
+        setActionError(error instanceof Error ? error.message : 'Cook rejection failed.');
+      }
     }
   };
 
@@ -116,6 +126,7 @@ export function AdminDashboard({
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 animate-fade-in">
+      {(errorMessage || actionError) && <p role="alert" className="mb-4 rounded-md border border-rust/20 bg-rust-50 p-3 text-sm text-rust-dark">{actionError || errorMessage}</p>}
       <div className="mb-6">
         <p className="text-sm text-ink-muted">{getFullDayName()}, admin</p>
         <h1 className="font-display text-2xl font-semibold text-ink">

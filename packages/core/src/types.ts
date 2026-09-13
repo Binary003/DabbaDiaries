@@ -14,7 +14,7 @@ export interface CookProfile {
   weeklyMenu: DayMenu[]; vegType: VegType; pricePerMeal: number; weeklyPrice: number; monthlyPrice: number;
   capacity: number; capacityCap: number; dailyCapacity?: number; selfDelivery: boolean; selfDeliveryFee: number;
   fssaiTier: FssaiTier; fssaiNumber: string; verificationStatus: 'pending' | 'approved' | 'rejected';
-  status?: 'pending' | 'active' | 'paused'; rejectionReason?: string; zoneId?: string; latitude?: number; longitude?: number; mealsPerDay: number; activeSubscribers: number;
+  status?: 'pending' | 'active' | 'paused' | 'rejected'; rejectionReason?: string; zoneId?: string; latitude?: number; longitude?: number; mealsPerDay: number; activeSubscribers: number;
 }
 export interface Subscription {
   id: string; customerId: string; cookId: string; planType: PlanType; mealSlot: MealSlot; deliveryMode: DeliveryMode;

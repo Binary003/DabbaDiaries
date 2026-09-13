@@ -11,6 +11,7 @@ export default function AdminApp() {
     const [zones, setZones] = useState<typeof mockZones>([]);
     const [orders, setOrders] = useState<typeof mockOrders>([]);
     const [operationsSummary, setOperationsSummary] = useState<AdminOperationsSummary>({ summary: { total_orders: 0, pending_orders: 0, confirmed_orders: 0, delivered_orders: 0, cancelled_orders: 0, platform_revenue: 0, cook_payouts: 0 }, cooks: [] });
+    const [errorMessage, setErrorMessage] = useState('');
 
     useEffect(() => {
         let channel: ReturnType<NonNullable<typeof supabase>['channel']> | null = null;
@@ -18,16 +19,22 @@ export default function AdminApp() {
 
         const load = async () => {
             if (!supabase) return;
-            const [{ data: cookRows }, { data: zoneRows }, { data: orderRows }, { data: summaryRow }] = await Promise.all([
+            const [cookResult, zoneResult, orderResult, summaryResult] = await Promise.all([
                 supabase.from('cook_profiles').select('*'),
                 supabase.from('delivery_zones').select('*'),
                 supabase.from('orders').select('*, customer:profiles!orders_customer_id_fkey(full_name, name, phone, pincode, locality)').order('delivery_date', { ascending: false }).range(0, 24),
                 supabase.rpc('get_admin_operations_summary', { page_number: 1, page_size: 25 }),
             ]);
-            if (cookRows) setCooks(cookRows.map((row) => mapCook(row as Record<string, unknown>)));
-            if (zoneRows) setZones(zoneRows.map((row) => mapZone(row as Record<string, unknown>)));
-            if (orderRows) setOrders(orderRows.map((row) => mapOrder(row as Record<string, unknown>)));
-            if (summaryRow) setOperationsSummary(summaryRow as AdminOperationsSummary);
+            const failed = [cookResult, zoneResult, orderResult, summaryResult].find((result) => result.error);
+            if (failed?.error) {
+                setErrorMessage(`Could not load admin data: ${failed.error.message}`);
+                return;
+            }
+            setErrorMessage('');
+            if (cookResult.data) setCooks(cookResult.data.map((row) => mapCook(row as Record<string, unknown>)));
+            if (zoneResult.data) setZones(zoneResult.data.map((row) => mapZone(row as Record<string, unknown>)));
+            if (orderResult.data) setOrders(orderResult.data.map((row) => mapOrder(row as Record<string, unknown>)));
+            if (summaryResult.data) setOperationsSummary(summaryResult.data as AdminOperationsSummary);
         };
 
         const connect = async () => {
@@ -42,7 +49,11 @@ export default function AdminApp() {
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'payments' }, () => void load())
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'transfers' }, () => void load())
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'refunds' }, () => void load())
-                .subscribe();
+                .subscribe((status, subscriptionError) => {
+                    if (subscriptionError || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                        setErrorMessage(`Live updates are unavailable: ${subscriptionError?.message || status}`);
+                    }
+                });
         };
 
         void connect();
@@ -61,14 +72,22 @@ export default function AdminApp() {
         };
     }, []);
 
-    const updateCook = (cookId: string, updates: Partial<CookProfile>) => {
-        setCooks((current) => current.map((cook) => cook.id === cookId ? { ...cook, ...updates } : cook));
-        void supabase?.from('cook_profiles').update({ status: updates.verificationStatus === 'approved' ? 'active' : updates.verificationStatus, daily_capacity: updates.capacity }).eq('id', cookId);
+    const updateCook = async (cookId: string, updates: Partial<CookProfile>) => {
+        if (!supabase) throw new Error('Supabase is not configured.');
+        const status = updates.verificationStatus === 'approved' ? 'active' : updates.verificationStatus;
+        const { data, error } = await supabase.from('cook_profiles').update({ status, rejection_reason: updates.rejectionReason, daily_capacity: updates.capacity }).eq('id', cookId).select().single();
+        if (error) throw error;
+        if (!data) throw new Error('The cook update was not confirmed by Supabase.');
+        setErrorMessage('');
+        setCooks((current) => current.map((cook) => cook.id === cookId ? mapCook(data as Record<string, unknown>) : cook));
     };
-    const updateZone = (zoneId: string, updates: Partial<DeliveryZone>) => {
-        setZones((current) => current.map((zone) => zone.id === zoneId ? { ...zone, ...updates } : zone));
-        void supabase?.from('delivery_zones').update({ has_platform_delivery: updates.hasPlatformDelivery, delivery_fee: updates.deliveryFee, assigned_partner_id: updates.assignedPartnerId }).eq('id', zoneId);
+    const updateZone = async (zoneId: string, updates: Partial<DeliveryZone>) => {
+        if (!supabase) throw new Error('Supabase is not configured.');
+        const { data, error } = await supabase.from('delivery_zones').update({ has_platform_delivery: updates.hasPlatformDelivery, delivery_fee: updates.deliveryFee, assigned_partner_id: updates.assignedPartnerId }).eq('id', zoneId).select().single();
+        if (error) throw error;
+        if (!data) throw new Error('The zone update was not confirmed by Supabase.');
+        setZones((current) => current.map((zone) => zone.id === zoneId ? mapZone(data as Record<string, unknown>) : zone));
     };
 
-    return <AuthGate><AdminDashboard cooks={cooks} zones={zones} orders={orders} operationsSummary={operationsSummary} onUpdateCook={updateCook} onUpdateZone={updateZone} /></AuthGate>;
+    return <AuthGate><AdminDashboard cooks={cooks} zones={zones} orders={orders} operationsSummary={operationsSummary} errorMessage={errorMessage} onUpdateCook={updateCook} onUpdateZone={updateZone} /></AuthGate>;
 }

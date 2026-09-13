@@ -1,9 +1,6 @@
 -- Mock Razorpay Route-shaped payment model.
--- Legacy wallet tables are intentionally retained but disconnected and cleared below.
+-- Legacy wallet tables are intentionally retained but disconnected from checkout.
 -- All provider behavior is mocked here until the real account/API is available.
-
-update public.wallets set balance = 0;
-delete from public.wallet_transactions;
 
 alter table public.payments alter column subscription_id drop not null;
 alter table public.payments add column if not exists customer_id uuid references public.profiles(id);
